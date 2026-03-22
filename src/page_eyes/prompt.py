@@ -173,7 +173,9 @@ SYSTEM_PROMPT_VLM = """
 5. 修改用户指令的原始意图或执行顺序
 """
 
-SYSTEM_PROMPT = SYSTEM_PROMPT_VLM if default_settings.model_type == 'vlm' else SYSTEM_PROMPT
+SYSTEM_PROMPT = (
+    SYSTEM_PROMPT_VLM if default_settings.model_type == "vlm" else SYSTEM_PROMPT
+)
 
 SYSTEM_PROMPT_EN = """
 ## Role Positioning

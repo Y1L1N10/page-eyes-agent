@@ -7,12 +7,18 @@ import asyncio
 from typing import TypeAlias
 
 from loguru import logger
-from pydantic_ai import RunContext, Agent
+from pydantic_ai import Agent, RunContext
 
+from ..deps import (
+    AgentDeps,
+    InputToolParams,
+    ToolParams,
+    ToolResult,
+    ToolResultWithOutput,
+)
+from ..device import HarmonyDevice
 from ._base import AgentTool, tool
 from ._mobile import MobileAgentTool
-from ..deps import ToolParams, ToolResult, InputToolParams, ToolResultWithOutput, AgentDeps
-from ..device import HarmonyDevice
 
 AgentDepsType: TypeAlias = AgentDeps[HarmonyDevice, AgentTool]
 
@@ -21,7 +27,9 @@ class HarmonyAgentTool(MobileAgentTool):
 
     @staticmethod
     def _start_url(ctx: RunContext[AgentDepsType], url: str):
-        return ctx.deps.device.target.shell(['aa', 'start', '-A', 'ohos.want.action.viewData', '-U', url])
+        return ctx.deps.device.target.shell(
+            ["aa", "start", "-A", "ohos.want.action.viewData", "-U", url]
+        )
 
     @tool(after_delay=0)
     async def input(self, ctx: RunContext[AgentDepsType], params: InputToolParams):
@@ -29,7 +37,7 @@ class HarmonyAgentTool(MobileAgentTool):
         在设备指定的元素中输入文本
         """
         x, y = params.get_coordinate(ctx)
-        logger.info(f'Input text: ({x}, {y}) -> {params.text}')
+        logger.info(f"Input text: ({x}, {y}) -> {params.text}")
         ctx.deps.device.target.uitest.input_text(params.text, x=x, y=y)
         if params.send_enter:
             enter_event = ctx.deps.device.target.uitest.keyevent.ENTER
@@ -38,9 +46,9 @@ class HarmonyAgentTool(MobileAgentTool):
 
     @tool
     async def open_app(
-            self,
-            ctx: RunContext[AgentDepsType],
-            params: ToolParams,
+        self,
+        ctx: RunContext[AgentDepsType],
+        params: ToolParams,
     ):
         """
         在设备中打开APP, 打开应用
@@ -49,19 +57,18 @@ class HarmonyAgentTool(MobileAgentTool):
         sub_agent = Agent(
             ctx.model,
             output_type=str,
-            system_prompt='你是一个移动端应用助手，负责根据用户输入的指令从提供的应用包名列表找出用户指令对应的包名，并仅返回包名，如果都不匹配则返回空字符串'
+            system_prompt="你是一个移动端应用助手，负责根据用户输入的指令从提供的应用包名列表找出用户指令对应的包名，并仅返回包名，如果都不匹配则返回空字符串",
         )
-        prompt = (f'用户指令：{params.instruction}\n'
-                  f'应用包名列表：{bundles}')
+        prompt = f"用户指令：{params.instruction}\n" f"应用包名列表：{bundles}"
         result = await sub_agent.run(prompt, output_type=str)
         bundle_name = result.output
         if not bundle_name:
-            return ToolResultWithOutput.failed(output='在该设备中未找到对应的应用')
-        logger.info(f'Find App bundle name：{bundle_name}')
+            return ToolResultWithOutput.failed(output="在该设备中未找到对应的应用")
+        logger.info(f"Find App bundle name：{bundle_name}")
         main_ability = ctx.deps.device.target.get_main_ability(bundle_name)
         out, _ = ctx.deps.device.target.aa.start(bundle_name, ability=main_ability)
-        if 'successfully' not in out:
-            return ToolResultWithOutput.failed(output=f'启动应用失败，原因：{out}')
+        if "successfully" not in out:
+            return ToolResultWithOutput.failed(output=f"启动应用失败，原因：{out}")
         await asyncio.sleep(2)
         await self.get_screen(ctx, parse_element=False)
         return ToolResult.success()

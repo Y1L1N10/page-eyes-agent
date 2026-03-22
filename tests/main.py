@@ -2,7 +2,8 @@ import asyncio
 import sys
 
 from loguru import logger
-from page_eyes.agent import WebAgent, AndroidAgent
+
+from page_eyes.agent import AndroidAgent, WebAgent
 
 logger.remove()
 logger.add(sys.stdout, level="INFO")
@@ -10,7 +11,7 @@ logger.add(sys.stdout, level="INFO")
 
 async def main():
     # Web 端
-    ui_agent = await WebAgent.create(simulate_device='iPhone 15 Pro Max', debug=False)
+    ui_agent = await WebAgent.create(simulate_device="iPhone 15 Pro Max", debug=False)
 
     # # 移动端
     # ui_agent = await AndroidAgent.create(serial=None,platform=Platform.QY)

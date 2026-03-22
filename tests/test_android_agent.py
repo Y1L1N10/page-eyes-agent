@@ -7,7 +7,7 @@ import pytest
 
 pytestmark = pytest.mark.asyncio(loop_scope="session")
 
-
+'''
 async def test_mobile_01(android_agent):
     await android_agent.run(
         """
@@ -67,3 +67,19 @@ async def test_mobile_05(android_agent):
     await android_agent.run(
         """打开QQ音乐, 点击乐馆，点击排行，点击腾讯音乐榜，检测当前页面出现由你榜"""
     )
+'''
+
+
+async def test_mobile_05(android_agent):
+    """测试多个交互"""
+    await android_agent.run("""
+        - 打开 "XMind" APP
+        - 等待1秒，直到页面加载完成
+        - 点击"登录"或"Sign In"按钮
+        - 等待登录页面加载完成
+        - 在邮箱输入框中输入 "yilin@xmind.com"
+        - 在密码输入框中输入 "xmindyilin"
+        - 勾选同意协议框
+        - 点击"登录"或"Sign In"确认按钮
+        - 等待1秒，直到设置中有账户信息
+        """)

@@ -66,19 +66,17 @@ exclude = [
 ]
 
 [[tool.uv.index]]
-# 腾讯镜像源，同步自pypi
-url = "https://mirrors.tencent.com/pypi/simple"
-name = "mirrors_pypi"
+# 阿里云镜像源
+url = "https://mirrors.aliyun.com/pypi/simple"
+name = "aliyun_pypi"
 default = true
-
-[[tool.uv.index]]
-# 腾讯镜像源，同步自pypi
-url = "https://mirrors.tencent.com/repository/pypi/tencent_pypi/simple"
-name = "tencent_pypi"
-publish-url = "https://mirrors.tencent.com/repository/pypi/tencent_pypi/simple"
 
 [dependency-groups]
 dev = [
+    "black>=26.3.1",
+    "flake8>=7.3.0",
+    "isort>=8.0.1",
+    "mypy>=1.19.1",
     "pytest>=8.4.2",
     "pytest-asyncio>=1.2.0",
 ]

@@ -7,10 +7,10 @@ from typing import TypeAlias
 
 from pydantic_ai import RunContext
 
-from ._base import AgentTool
-from ._mobile import MobileAgentTool
 from ..deps import AgentDeps
 from ..device import AndroidDevice
+from ._base import AgentTool
+from ._mobile import MobileAgentTool
 
 AgentDepsType: TypeAlias = AgentDeps[AndroidDevice, AgentTool]
 
@@ -19,4 +19,6 @@ class AndroidAgentTool(MobileAgentTool):
 
     @staticmethod
     def _start_url(ctx: RunContext[AgentDepsType], url: str):
-        return ctx.deps.device.target.shell(f'am start -a android.intent.action.VIEW -d "{url}"')
+        return ctx.deps.device.target.shell(
+            f'am start -a android.intent.action.VIEW -d "{url}"'
+        )

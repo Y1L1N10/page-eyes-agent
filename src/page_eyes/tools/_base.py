@@ -10,21 +10,39 @@ import traceback
 from abc import ABC, abstractmethod
 from functools import wraps
 from pathlib import Path
-from typing import IO, Optional, cast, TypeAlias, Union
+from typing import IO, Optional, TypeAlias, Union, cast
 
 from httpx import AsyncClient
 from loguru import logger
+
 # noinspection PyProtectedMember
 from loguru._logger import context as logger_context
 from pydantic import TypeAdapter
-from pydantic_ai import ModelRetry, RunContext, ToolReturn, ImageUrl, Tool
+from pydantic_ai import ImageUrl, ModelRetry, RunContext, Tool, ToolReturn
 
 from ..config import default_settings
-from ..deps import AgentDeps, ToolParams, ToolResult, StepInfo, LocationToolParams, ClickToolParams, \
-    InputToolParams, SwipeToolParams, OpenUrlToolParams, ScreenInfo, AgentContext, \
-    WaitForKeywordsToolParams, AssertContainsParams, MarkFailedParams, AssertNotContainsParams, ToolResultWithOutput, \
-    WaitToolParams, LLMLocationToolParams, SwipeForKeywordsToolParams
-from ..device import AndroidDevice, WebDevice, HarmonyDevice, IOSDevice
+from ..deps import (
+    AgentContext,
+    AgentDeps,
+    AssertContainsParams,
+    AssertNotContainsParams,
+    ClickToolParams,
+    InputToolParams,
+    LLMLocationToolParams,
+    LocationToolParams,
+    MarkFailedParams,
+    OpenUrlToolParams,
+    ScreenInfo,
+    StepInfo,
+    SwipeForKeywordsToolParams,
+    SwipeToolParams,
+    ToolParams,
+    ToolResult,
+    ToolResultWithOutput,
+    WaitForKeywordsToolParams,
+    WaitToolParams,
+)
+from ..device import AndroidDevice, HarmonyDevice, IOSDevice, WebDevice
 from ..util.js_tool import JSTool
 from ..util.storage import Base64Strategy
 
@@ -32,7 +50,7 @@ storage_client = default_settings.storage_client
 
 AgentDepsType: TypeAlias = AgentDeps[
     Union[WebDevice, AndroidDevice, HarmonyDevice, IOSDevice],
-    'AgentTool',
+    "AgentTool",
 ]
 
 
@@ -65,17 +83,20 @@ class ToolHandler:
         if not all([self.ctx, self.step_params]):
             return
         if self.ctx.deps.context.current_step.parallel_tool_calls:
-            raise ModelRetry('only use one tool at a time')
+            raise ModelRetry("only use one tool at a time")
 
         self.current_step.params = self.step_params.model_dump(
-            exclude_defaults=True,
-            exclude_none=True
+            exclude_defaults=True, exclude_none=True
         )
-        self.current_step.action = self.current_step.params.pop('action')
+        self.current_step.action = self.current_step.params.pop("action")
 
-        if self.ctx.deps.settings.debug and isinstance(self.step_params, LLMLocationToolParams):
+        if self.ctx.deps.settings.debug and isinstance(
+            self.step_params, LLMLocationToolParams
+        ):
             if isinstance(self.ctx.deps.device, WebDevice):
-                bbox = self.ctx.deps.context.current_step.screen_elements[self.step_params.element_id].get('bbox')
+                bbox = self.ctx.deps.context.current_step.screen_elements[
+                    self.step_params.element_id
+                ].get("bbox")
                 await JSTool.add_highlight_element(self.ctx.deps.device.target, bbox)
 
     async def post_handle(self, tool_result: ToolResult):
@@ -129,6 +150,7 @@ def tool(f=None, *, after_delay=0, before_delay=0, llm=True, vlm=True):
 
 class AgentTool(ABC):
     """VLM 模型使用的工具可以以 _vl 结尾, 如 click_vl -> click"""
+
     OMNI_BASE_URL = default_settings.omni_parser.base_url
     OMNI_KEY = default_settings.omni_parser.key
 
@@ -136,47 +158,61 @@ class AgentTool(ABC):
     def tools(self) -> list:
         result = []
         for item in dir(self):
-            if item.startswith('_') or item in ['tools', 'tear_down']:
+            if item.startswith("_") or item in ["tools", "tear_down"]:
                 continue
             value = getattr(self, item)
-            if callable(value) and hasattr(value, 'is_tool'):
-                if default_settings.model_type == 'llm' and not getattr(value, 'llm'):
+            if callable(value) and hasattr(value, "is_tool"):
+                if default_settings.model_type == "llm" and not getattr(value, "llm"):
                     continue
-                if default_settings.model_type == 'vlm' and not getattr(value, 'vlm'):
+                if default_settings.model_type == "vlm" and not getattr(value, "vlm"):
                     continue
                 # 移除 _vl 后缀，让工具名称保持一致
-                result.append(Tool(value, name=value.__name__.removesuffix('_vl')))
+                result.append(Tool(value, name=value.__name__.removesuffix("_vl")))
 
         return result
 
     @staticmethod
-    async def _upload_cos(file: IO[bytes], prefix='page-eyes-agent/', suffix='.png') -> str:
-        return await storage_client.async_upload_file(file, prefix=prefix, suffix=suffix)
+    async def _upload_cos(
+        file: IO[bytes], prefix="page-eyes-agent/", suffix=".png"
+    ) -> str:
+        return await storage_client.async_upload_file(
+            file, prefix=prefix, suffix=suffix
+        )
 
-    async def _parse_element(self, file: Optional[IO[bytes]] = None, image_url: Optional[str] = None):
-        url = f'{self.OMNI_BASE_URL}/omni/parse/'
+    async def _parse_element(
+        self, file: Optional[IO[bytes]] = None, image_url: Optional[str] = None
+    ):
+        url = f"{self.OMNI_BASE_URL}/omni/parse/"
         if not file and not image_url:
-            raise ValueError('请提供file或image_url')
-        trace_id = logger_context.get().get('trace_id')
-        headers = {'X-Trace-Id': trace_id} if trace_id else None
+            raise ValueError("请提供file或image_url")
+        trace_id = logger_context.get().get("trace_id")
+        headers = {"X-Trace-Id": trace_id} if trace_id else None
         async with AsyncClient(timeout=300, headers=headers) as client:
-            response = await client.post(url, files={'file': file}, data={'key': self.OMNI_KEY})
+            response = await client.post(
+                url, files={"file": file}, data={"key": self.OMNI_KEY}
+            )
             response.raise_for_status()
             return response.json()
 
-    async def get_screen(self, ctx: RunContext[AgentDepsType], parse_element: bool = True) -> ScreenInfo:
+    async def get_screen(
+        self, ctx: RunContext[AgentDepsType], parse_element: bool = True
+    ) -> ScreenInfo:
         image_buffer = await self.screenshot(ctx)
         if parse_element:
             parsed_data = await self._parse_element(image_buffer)
-            image_url = parsed_data.get('labeled_image_url') or ''
-            parsed_content_list = parsed_data.get('parsed_content_list') or []
-            logger.info(f'👁‍🗨 Get screen element：{image_url}')
+            image_url = parsed_data.get("labeled_image_url") or ""
+            parsed_content_list = parsed_data.get("parsed_content_list") or []
+            logger.info(f"👁‍🗨 Get screen element：{image_url}")
             if not parsed_content_list:
-                raise Exception(f'Screen parsed error! {parsed_data}')
+                raise Exception(f"Screen parsed error! {parsed_data}")
         else:
-            image_url = await self._upload_cos(image_buffer, suffix=Path(image_buffer.name).suffix)
+            image_url = await self._upload_cos(
+                image_buffer, suffix=Path(image_buffer.name).suffix
+            )
             parsed_content_list = []
-            logger.info(f'👁‍🗨 Get screen url：{image_url[:200] + (image_url[200:] and "...")}')
+            logger.info(
+                f'👁‍🗨 Get screen url：{image_url[:200] + (image_url[200:] and "...")}'
+            )
 
         # 将当前屏幕信息记录到上下文
         ctx.deps.context.current_step.image_url = image_url
@@ -184,16 +220,18 @@ class AgentTool(ABC):
         # 仅保留必要的字段给LLM
         parsed_elements = TypeAdapter(list[dict]).dump_python(
             parsed_content_list,
-            exclude={'__all__': {'type', 'interactivity', 'source'}}
+            exclude={"__all__": {"type", "interactivity", "source"}},
         )
         return ScreenInfo(image_url=image_url, screen_elements=parsed_elements)
 
     async def get_screen_vl(self, ctx: RunContext[AgentDepsType]) -> ScreenInfo:
         """获取当前屏幕信息，仅用于VLm模型"""
         image_buffer = await self.screenshot(ctx)
-        image_url = Base64Strategy().upload_file(image_buffer, suffix='.png')
+        image_url = Base64Strategy().upload_file(image_buffer, suffix=".png")
         parsed_content_list = []
-        logger.info(f'👁‍🗨 Get screen url：{image_url[:200] + (image_url[200:] and "...")}')
+        logger.info(
+            f'👁‍🗨 Get screen url：{image_url[:200] + (image_url[200:] and "...")}'
+        )
 
         # 将当前屏幕信息记录到上下文
         ctx.deps.context.current_step.image_url = image_url
@@ -202,7 +240,9 @@ class AgentTool(ABC):
         return ScreenInfo(image_url=image_url, screen_elements=parsed_content_list)
 
     @tool(vlm=False)
-    async def get_screen_info(self, ctx: RunContext[AgentDepsType]) -> ToolResultWithOutput[dict]:
+    async def get_screen_info(
+        self, ctx: RunContext[AgentDepsType]
+    ) -> ToolResultWithOutput[dict]:
         """
         获取当前屏幕信息，每个元素都有唯一的 ID，单个元素包含以下字段：
         id: 元素ID
@@ -218,7 +258,16 @@ class AgentTool(ABC):
         # 仅保留必要的字段给 LLM
         parsed_elements = TypeAdapter(list[dict]).dump_python(
             screen_info.screen_elements,
-            include={'__all__': {'id', 'content', 'left_elem_ids', 'top_elem_ids', 'right_elem_ids', 'bottom_elem_ids'}}
+            include={
+                "__all__": {
+                    "id",
+                    "content",
+                    "left_elem_ids",
+                    "top_elem_ids",
+                    "right_elem_ids",
+                    "bottom_elem_ids",
+                }
+            },
         )
         return ToolResultWithOutput.success(parsed_elements)
 
@@ -229,22 +278,25 @@ class AgentTool(ABC):
         """
         screen_info = await self.get_screen_vl(ctx)
         return ToolReturn(
-            return_value='当前屏幕截图：',
-            content=[ImageUrl(url=screen_info.image_url)]
+            return_value="当前屏幕截图：", content=[ImageUrl(url=screen_info.image_url)]
         )
 
     @tool(vlm=False)
-    async def wait(self, ctx: RunContext[AgentDepsType], params: WaitForKeywordsToolParams) -> ToolResult:
+    async def wait(
+        self, ctx: RunContext[AgentDepsType], params: WaitForKeywordsToolParams
+    ) -> ToolResult:
         """
         在任务中等待或停留指定的超时时间（timeout），单位：秒，等待过程中可期望指定的关键字出现
         """
         if params.expect_keywords is None:
-            logger.info(f'Wait for timeout {params.timeout}s')
+            logger.info(f"Wait for timeout {params.timeout}s")
             await asyncio.sleep(params.timeout)
             return ToolResult.success()
         else:
-            logger.info(f'Wait up to {params.timeout}s '
-                        f'for the keywords {params.expect_keywords} to appear on the screen.')
+            logger.info(
+                f"Wait up to {params.timeout}s "
+                f"for the keywords {params.expect_keywords} to appear on the screen."
+            )
             st = time.time()
             while time.time() - st < params.timeout:
                 result = await self.expect_screen_contains(ctx, params.expect_keywords)
@@ -255,14 +307,18 @@ class AgentTool(ABC):
                 return ToolResult.failed()
 
     @tool(llm=False)
-    async def wait_vl(self, ctx: RunContext[AgentDepsType], params: WaitToolParams) -> ToolResult:
+    async def wait_vl(
+        self, ctx: RunContext[AgentDepsType], params: WaitToolParams
+    ) -> ToolResult:
         """
         在任务中等待或停留指定的超时时间（timeout），单位：秒
         """
         await asyncio.sleep(params.timeout)
         return ToolResult.success()
 
-    async def _parse_screen_keywords(self, ctx: RunContext[AgentDepsType], keywords: list[str]) -> tuple[list, list]:
+    async def _parse_screen_keywords(
+        self, ctx: RunContext[AgentDepsType], keywords: list[str]
+    ) -> tuple[list, list]:
         screen_info: ScreenInfo = await self.get_screen(ctx, parse_element=True)
         elements_str = str(screen_info.screen_elements)
         contains, not_contains = [], []
@@ -274,21 +330,19 @@ class AgentTool(ABC):
         return contains, not_contains
 
     async def expect_screen_contains(
-            self,
-            ctx: RunContext[AgentDepsType],
-            keywords: list[str]
+        self, ctx: RunContext[AgentDepsType], keywords: list[str]
     ) -> ToolResult:
         contains, not_contains = await self._parse_screen_keywords(ctx, keywords)
         if len(not_contains) > 0:
-            logger.warning(f'Screen does not contain expected keywords:"{not_contains}"')
+            logger.warning(
+                f'Screen does not contain expected keywords:"{not_contains}"'
+            )
             return ToolResult.failed()
         else:
             return ToolResult.success()
 
     async def expect_screen_not_contains(
-            self,
-            ctx: RunContext[AgentDepsType],
-            keywords: list[str]
+        self, ctx: RunContext[AgentDepsType], keywords: list[str]
     ) -> ToolResult:
         contains, not_contains = await self._parse_screen_keywords(ctx, keywords)
         if len(contains) > 0:
@@ -299,9 +353,7 @@ class AgentTool(ABC):
 
     @tool(before_delay=2, vlm=False)
     async def assert_screen_contains(
-            self,
-            ctx: RunContext[AgentDepsType],
-            params: AssertContainsParams
+        self, ctx: RunContext[AgentDepsType], params: AssertContainsParams
     ) -> ToolResult:
         """
         检查屏幕中是否出现或包含指定的多个关键字内容，如果是则 is_success=True, 否则 is_success=False
@@ -310,9 +362,7 @@ class AgentTool(ABC):
 
     @tool(before_delay=2, vlm=False)
     async def assert_screen_not_contains(
-            self,
-            ctx: RunContext[AgentDepsType],
-            params: AssertNotContainsParams
+        self, ctx: RunContext[AgentDepsType], params: AssertNotContainsParams
     ) -> ToolResult:
         """
         检查屏幕中是否不出现或不包含指定的多个关键字内容，如果是则 is_success=True, 否则 is_success=False
@@ -321,43 +371,45 @@ class AgentTool(ABC):
 
     @tool(vlm=False)
     async def mark_failed(
-            self,
-            ctx: RunContext[AgentDepsType],
-            params: MarkFailedParams
+        self, ctx: RunContext[AgentDepsType], params: MarkFailedParams
     ) -> ToolResult:
         """
         Mark the task as failed and terminate immediately if an element is not found or is not actionable.
         """
-        logger.info(f'Mark task failed, reason: {params.reason}')
+        logger.info(f"Mark task failed, reason: {params.reason}")
         ctx.deps.context.set_step_failed(params.reason)
         return ToolResult.success()
 
     @tool(llm=False, vlm=False)
     async def set_task_failed(
-            self,
-            ctx: RunContext[AgentDepsType],
-            params: MarkFailedParams
+        self, ctx: RunContext[AgentDepsType], params: MarkFailedParams
     ) -> ToolResult:
         """
         仅任务失败或断言失败时调用，否则不允许调用
         """
-        logger.info(f'Mark task failed, reason: {params.reason}')
+        logger.info(f"Mark task failed, reason: {params.reason}")
         ctx.deps.context.set_step_failed(params.reason)
         return ToolResult.success()
 
     @tool(vlm=False)
-    async def swipe(self, ctx: RunContext[AgentDepsType], params: SwipeForKeywordsToolParams) -> ToolResult:
+    async def swipe(
+        self, ctx: RunContext[AgentDepsType], params: SwipeForKeywordsToolParams
+    ) -> ToolResult:
         """
         在设备屏幕中滑动或滚动
         """
         return await self._swipe_for_keywords(ctx, params)
 
     @tool(llm=False)
-    async def swipe_vl(self, ctx: RunContext[AgentDepsType], params: SwipeToolParams) -> ToolResult:
+    async def swipe_vl(
+        self, ctx: RunContext[AgentDepsType], params: SwipeToolParams
+    ) -> ToolResult:
         """
         在设备屏幕中滑动或滚动
         """
-        return await self._swipe_for_keywords(ctx, SwipeForKeywordsToolParams(**params.model_dump()))
+        return await self._swipe_for_keywords(
+            ctx, SwipeForKeywordsToolParams(**params.model_dump())
+        )
 
     @staticmethod
     @abstractmethod
@@ -365,23 +417,33 @@ class AgentTool(ABC):
         raise NotImplementedError
 
     @abstractmethod
-    async def open_url(self, ctx: RunContext[AgentDepsType], params: OpenUrlToolParams) -> ToolResult:
+    async def open_url(
+        self, ctx: RunContext[AgentDepsType], params: OpenUrlToolParams
+    ) -> ToolResult:
         raise NotImplementedError
 
     @abstractmethod
-    async def click(self, ctx: RunContext[AgentDepsType], params: ClickToolParams) -> ToolResult:
+    async def click(
+        self, ctx: RunContext[AgentDepsType], params: ClickToolParams
+    ) -> ToolResult:
         raise NotImplementedError
 
     @abstractmethod
-    async def input(self, ctx: RunContext[AgentDepsType], params: InputToolParams) -> ToolResult:
+    async def input(
+        self, ctx: RunContext[AgentDepsType], params: InputToolParams
+    ) -> ToolResult:
         raise NotImplementedError
 
     @abstractmethod
-    async def _swipe_for_keywords(self, ctx: RunContext[AgentDepsType], params: SwipeForKeywordsToolParams) -> ToolResult:
+    async def _swipe_for_keywords(
+        self, ctx: RunContext[AgentDepsType], params: SwipeForKeywordsToolParams
+    ) -> ToolResult:
         raise NotImplementedError
 
     @abstractmethod
-    async def tear_down(self, ctx: RunContext[AgentDepsType], params: ToolParams) -> ToolResult:
+    async def tear_down(
+        self, ctx: RunContext[AgentDepsType], params: ToolParams
+    ) -> ToolResult:
         raise NotImplementedError
 
     # TODO: 所有端实现返回上一页

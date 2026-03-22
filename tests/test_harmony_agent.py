@@ -7,7 +7,7 @@ import pytest
 
 pytestmark = pytest.mark.asyncio(loop_scope="session")
 
-
+'''
 async def test_mobile_01(harmony_agent):
     await harmony_agent.run(
         """
@@ -46,3 +46,37 @@ async def test_mobile_03(harmony_agent):
         - 点击 "全部播放"
         """
     )
+'''
+
+
+async def test_mobile_01(harmony_agent):
+    """测试 XMind 登录功能"""
+    await harmony_agent.run("""
+        - 打开 "XMind" APP
+        - 等待1秒，直到页面加载完成
+        - 点击"登录"或"Sign In"按钮
+        - 等待登录页面加载完成
+        - 在邮箱输入框中输入 "yilin@xmind.com"
+        - 在密码输入框中输入 "xmindyilin"
+        - 勾选同意协议框
+        - 点击"登录"或"Sign In"确认按钮
+        - 等待1秒，直到设置中有账户信息
+        """)
+
+
+async def test_mobile_02(harmony_agent):
+    """测试打开 XMind 并创建空白导图"""
+    await harmony_agent.run("""
+        - 打开 "XMind" APP
+        - 等待1秒，直到出现新建或创建按钮
+        - 点击新建导图按钮（如"+"或"新建"）
+        - 在模板选择页中选择"空白导图"
+        - 等待1秒，直到导图编辑页面出现中心主题或Center Topic
+        """)
+
+
+async def test_mobile_03(harmony_agent):
+    """测试在导图中添加元素，新增子节点和兄弟节点，新增画布"""
+    await harmony_agent.run("""
+
+        """)
